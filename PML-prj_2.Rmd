@@ -1,0 +1,68 @@
+---
+title: "Practical Machine Learning Course Project"
+output: html_document
+---
+# Assignment: Prediction
+## Instructions
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+The goal of your project is to predict the manner in which they did the exercise. This is the "**classe**" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE)
+```
+```{r, echo=FALSE}
+setwd("C:\\Users\\macdonmk\\Desktop\\PMLproject")
+```
+### Load caret package and data training file
+```{r, echo=TRUE}
+library(caret)
+train <- read.csv("pml-training.csv")
+```
+
+### Exploration and dimension reduction
+I reduce training data to columns with complete records (and ignore dates, names, record numbers)
+```{r, echo=TRUE}
+training <- train[,c(7:11,37:49,60:68,84:86,102,113:124,151:160)]
+```
+
+I do some featurePlots to see which variables do not have some correlation with classe, from a visual perspective. I show only plot here for brevity.
+```{r, echo=TRUE}
+featurePlot(x=training[,1:4], y=training$classe, plot="pairs")
+```
+
+I see that "*num_window*" is unimportant so it is removed.
+```{r, echo=TRUE}
+training <- train[,c(8:11,37:49,60:68,84:86,102,113:124,151:160)]
+```
+
+I found that performing *Random Forest* seach with all remaining 53 variables is computationally expense, so I see if I can reduce the number of variables by checking variable correlations. I found that with a threshold correlation of 0.90, I was able to eliminate 7 variables and retain very high accuracy.This decreased subsequent computing time and the likelihood of overfitting.
+```{r, echo=TRUE}
+corrs <- abs(cor(training[,-52]))
+diag(corrs) <- 0
+which(corrs>0.90, arr.ind=TRUE)
+# Down to 46 variables for training set!
+training <- training[,-c(4,8,9,10,19,33,45)]
+```
+Therefore I omit the variables : "total_accel_belt", "accel_belt_x", "accel_belt_y", "accel_belt_z", "gyros_arm_y", "gyros_dumbbell_z", "gyros_forearm_z".
+
+
+### Create training and cross-validation data
+I retain **70% for training for 30% for testing (cross-validation).**
+```{r, echo=TRUE}
+inTrain = createDataPartition(training$classe, p = 0.7)[[1]]
+trainset = training[ inTrain,]
+crossset = training[-inTrain,]
+```
+
+### Modelling
+I initially wanted to *stack Random Forest and a Gradient Boost Models*; however, I found that generating a Gradient Boost model was computationally expensive (even when I reduced the number of variable to 32). Ultimately, I used a **Random Forest with 46 variables**.
+```{r, echo=TRUE}
+set.seed(62433)
+# Random Forest
+modfitRF <- train(classe ~ ., method="rf", data=trainset)
+confusionMatrix(crossset$classe, predict(modfitRF,crossset))
+```
+It can be seen that the Random Forest model provides **accuracy of 0.9944** with the testing set, and I received a 100% score on the 20-question final quiz.
